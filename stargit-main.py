@@ -28,26 +28,36 @@ class Repo:
     def get_branches(self):
         cmd = ['branch']
         op = run_cmd(cmd)
-        branchlist = op.out.split("\n")
-        namelist = []
+        linelist = op.out.split("\n")
+        branchlist = []
         current = -1
-        for i in branchlist:
-            strings = branchlist[i].split()
-            if len(strings.get(-1, "")) > 0:
-                namelist.append(strings[-1])
+        for line in linelist:
+            strings = line.split()
+            if len(strings.get(0, "")) > 0:
                 if strings[0] == "*":
-                    current = len(namelist)-1
-        return namelist, current
+                    current = len(namelist)
+                    strings = strings[1:]
+                info = []
+                info['nm'] = strings[0]
+                info['sh'] = strings[1]
+                info['cm'] = strings[-1]
+                info['rt'] = None
+
+                if re.search(r'\[\.\]'):
+                    info['rt'] = re.sub(r'.*/', r'', strings[2][1:-1])
+                    
+                branchlist.append(info)
+        return branchlist, current
     def get_cur_branch(self):
-        branch_info = get_branches()
-        return branch_info[0][branch_info[1]]
+        branches, current = get_branches()
+        return branches[current]
     
     def do_fetch(self):
         run_cmd(['fetch'])
         return 0
     
     def do_push(self, remote = ''):
-        cmd = 'push --porcelain ' + remote + ' ' + get_cur_branch()
+        cmd = 'push --porcelain ' + remote + ' ' + get_cur_branch().nm
         cmd = cmd.split()
         
         op = run_cmd(cmd)
@@ -82,11 +92,24 @@ def assure_location(path, name):
 
 def setup_branches(path, url):
     master = Repo(pj(path, 'master'))
-    master.do_fetch()
-    branches = master.get_branches()[0]
+    
+    folders = [ name for name in os.listdir(path) if os.path.isdir(pj(path, name)) and name != 'master' ]
+    repos = []
+    rts = []
+    rts_owned = []
 
-    for i in branches:
-        name = branches[i]
-        assure_location(path, name)
-        repo = Repo(pj(path, name), origin=url)
-        repo.do_checkout(name)
+    for f in folders:
+        repo = Repo(pj(path, f))
+        #Add checks for empty/corrupt repo!
+        repos.append(repo)
+        rts_owned.append(repo.get_cur_branch().rt)
+    
+    master.do_fetch()
+    branches = master.get_branches()
+
+    rts = [name for branch in branches name =  branch.rt]
+
+    for rt in rts:
+        if rt in rts_owned:
+            continue
+        None
