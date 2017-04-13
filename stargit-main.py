@@ -18,12 +18,6 @@ class Repo:
         return {'out': format_output(result.stdout.read()), 'err': format_output(result.stderr.read())}
     def set_origin(self, url):
         run_cmd(("remote add origin " + url).split())
-        
-    def __init__(self, get_path, origin = None):
-        self.path = get_path
-        run_cmd(['init'])
-        if origin:
-            set_origin(str(origin))
     
     def get_branches(self):
         cmd = ['branch']
@@ -52,8 +46,13 @@ class Repo:
         branches, current = get_branches()
         return branches[current]
     
-    def do_fetch(self):
-        run_cmd(['fetch'])
+    def do_fetch(self, branch = None, had = False):
+        cmd = ['fetch', 'origin']
+        if branch:
+            cmd.append(branch)
+        elif had:
+            cmd.append(get_cur_branch().rt)
+        run_cmd(cmd)
         return 0
     
     def do_push(self, remote = ''):
@@ -83,8 +82,23 @@ class Repo:
         cmd = 'commit -m updated'
         return 0
 
-    def do_checkout(self, branch):
-        cmd = ['checkout', str(branch)]
+    def do_checkout(self, branch, new = False, track = False):
+        cmd = ['checkout']
+        if new:
+            cmd.append('-b')
+            
+        cmd.append(str(branch))
+        
+        if new and track:
+            cmd.append('origin/' + branch)
+
+        run_cmd(cmd)
+        
+    def __init__(self, get_path, origin):
+        self.path = get_path
+        run_cmd(['init'])
+        if origin:
+            set_origin(str(origin))
 
 def assure_location(path, name):
     if not os.path.isfolder(pj(path, name)):
@@ -107,9 +121,15 @@ def setup_branches(path, url):
     master.do_fetch()
     branches = master.get_branches()
 
-    rts = [name for branch in branches name =  branch.rt]
+    rts = [branch.rt for branch in branches]
 
     for rt in rts:
         if rt in rts_owned:
             continue
-        None
+        fpath = pj(path, rt)
+        os.mkdir(fpath)
+        repo = Repo(fpath, origin = url)
+        repo.append(repo)
+        repo.do_fetch()
+        repo.do_checkout(rt, new = True, track = True)
+        rts_owned.append(rt)
