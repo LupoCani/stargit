@@ -4,6 +4,8 @@ import subprocess
 import tkinter as tk
 import uuid
 import time
+import json
+import copy
 from os.path import join as pj
 
 try:
@@ -21,15 +23,18 @@ s3 = u'\u2514' + ' '
 gui_lock = thread.allocate_lock()
 gui_pipe = {
     '_DONE': False,
-    'l_sel': None
+    'l_sel': None,
+    'l_ref': None,
+    'btn_q': []
     }
 
-def OnSelect(event):
+def l_on_select(event):
     widget = event.widget
     value = widget.curselection()[0]
     print(str(value))
     with gui_lock:
         gui_pipe['l_sel'] = value
+def b_p_
 
 class Application(tk.Frame):
     def createWidgets(self):
@@ -47,7 +52,7 @@ class Application(tk.Frame):
         self.hi_there.pack({"side": "left"})
 
         listbox = tk.Listbox(self, width=20, height=5, font=('consolas', 10))
-        listbox.bind('<<ListboxSelect>>', OnSelect)
+        listbox.bind('<<ListboxSelect>>', l_on_select)
         listbox.pack({"side": "left"})
         listbox.insert(tk.END, s1 + "Test")
         listbox.insert(tk.END, s2 + "Lorem")
@@ -57,6 +62,10 @@ class Application(tk.Frame):
         listbox.insert(tk.END, s1 + "Amet")
         print(str(listbox.delete(3)))
         listbox.insert(3, s3 + "Dolor")
+        listbox.insert(20, s3 + "Grande")
+
+        with gui_lock:
+            gui_pipe['l_ref'] = listbox
 
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
@@ -206,11 +215,21 @@ class Repo:
             self.set_shipyard(str(shipyard))
 
 def list_dir(path):
-    return [item for item in os.listdir(path) if os.path.isdir(pj(path, item))]
+    return list(set([item for item in os.listdir(path) if os.path.isdir(pj(path, item))]))
+
+def list_file(path):
+    return list(set([item for item in os.listdir(path) if os.path.isfile(pj(path, item))]))
+
+def list_all(path):
+    return list(set([item for item in os.listdir(path) if os.path.exists(pj(path, item))]))
 
 def assure_location(path, name):
-    if not os.path.isfolder(pj(path, name)):
-        os.mkdir(pj(path, name))
+    if not os.path.isdir(pj(path, name)):
+        try:
+            os.mkdir(pj(path, name))
+        except:
+            return False
+    return True
 
 def inc(num = -1):
     return num + 1
@@ -280,23 +299,114 @@ def setup_folders(path, url):
             continue
         setup_repo(path, url, rt)
         rts_owned.append(rt)
+    
+def rm_any(path):
+    if os.path.isfile(path):
+        os.remove(path)
+        return 0
+    if not os.path.isdir(path):
+        return 1
+    
+    for item in list_all(path):
+        err = rm_any(pj(path, item))
+        if err != 0:
+            return err
+        
+    a_list = listdir(path)
+    if a_list == None:
+        os.rmdir(path)
+        return 0
+    return 2
+
+def open_data(d_name, f_name):
+    
+    d_path = str(d_name)
+    f_path = pj(d_path, str(f_name))
+    
+    if not os.path.isfile(f_path):
+        return 201, None
+    
+    with open(f_path, 'r') as f_data:
+        try:
+            data = json.load(f_data)
+        except:
+            return 202, None
+            
+    if not (type(data) is dict):
+        return 203, None
+    if not data.get('is_setup', False):
+        return 204, None
+    
+    return 0, data
+
+def setup_data(d_name, f_name, data):
+    f_path = pj(d_name, f_name)
+    if not assure_location(d_name):
+        return 1
+    
+    with open(f_path, 'w') as f_data:
+        json.dump(data, f_data)
+
+def wipe_data():
+    if os.path.exists(d_name):
+        rm_any(d_name)
 
 def window_func():
     root = tk.Tk()
     app = Application(master=root)
     app.mainloop()
+    print('QUIT: Window')
     with gui_lock:
         gui_pipe['_DONE'] = True
-    root.destroy()
-    return None
+        try:
+            root.destroy()
+        except:
+            None
+        #print("For real this time")
+        return None
+
+class Database:
+    db_dict = {}
+    db_path = ""
+    def __init__(self, db_path: str, new: bool = False, db_dict: dict):
+        self.db_path = db_path
+        if new:
+            self.db_dict = db_dict
+            self.update()
+        else:
+            with open(self.db_path, 'r') as db_file:
+                self.db_dict = json.load(db_file)
+    
+    def update(self):
+        with open(db_path, 'w') as db_file:
+            json.dump(db_dict, db_file)
+    
+    def __enter__(self):
+        return self.db_dict
+    
+    def __exit__(self):
+        self.db_dict = copy.deepcopy(self.db_dict)
+        self.update()
+    ## Thanks to http://effbot.org/zone/python-with-statement.htm
+        
+
+data_dir_name = 'Stargit'
+data_file_name = 'data.json'
+
+err, data = open_data(data_dir_name, data_file_name)
+if err == 0:
+    
 
 window_thread = thread.start_new_thread(window_func, ())
 RUNNING = True
 while RUNNING:
     with gui_lock:
         print(gui_pipe['l_sel'])
-        RUNNING = not gui_pipe['_DONE']
-        time.sleep(1)
+        if gui_pipe['_DONE']:
+            RUNNING = False
+    time.sleep(0.01)
+    gui_pipe['l_ref'].delete(3)
+    gui_pipe['l_ref'].insert(3, s3 + "Dolor")
 
-print('QUIT')
+print('QUIT: Main')
     
