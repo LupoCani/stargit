@@ -1,9 +1,7 @@
-class Test():
-    def one(self, num):
-        print("Num: " + str(num))
-    def two(self, num):
-        one(num + 1)
+a = [1, 3, 6]
 
-var = Test()
+b = [10, 11, 12, 13]
 
-var.two(3)
+a.extend(b)
+
+print(a)

@@ -100,7 +100,18 @@ class Repo:
         self.run_cmd(("remote add shipyard " + url).split())
 
     def get_remotes(self):
-        return None
+        cmd = ['remote', '-v']
+        op = self.run_cmd(cmd)
+        rem_str_list = op.out.split('\n')
+        rem_list = []
+        for rem_str in rem_str_list:
+            rem = rem_str.split()
+            rem_list.append({
+                'nm':  rem[0],
+                'url': rem[1]
+                })
+        return rem_list
+            
 
     def branch_rm(self, branch):
         cmd = ['branch', '-d', branch]
@@ -154,6 +165,19 @@ class Repo:
         if ident_neterr(op.err):
             return 101
         return 0
+    def do_merge_safe(self):
+        cmd = ['merge', '--ff-only']
+        cur_branch = self.get_cur_branch()
+        cmd.append('shipyard/' + cur_branch.rm)
+        cmd.append(cur_branch.nm)
+
+        op = self.run_cmd(cmd)
+        if re.search('ast-forward', op.out):
+            return 0
+        if re.search('lready up-to-date', op.out):
+            return 0
+        if re.search('possible to fast-forwar', op.err):
+            return 1
     
     def do_push(self, remote = False, upstream = True):
         cmd = ['push', '--porcelain']
@@ -243,23 +267,25 @@ def assure_unique(name, namelist, modify = inc):
             break;
     return new_name
 
-def setup_repo(path, url, branch, new = False):
+def setup_repo(path, url, branch, orphan = False):
     f_list = list_dir(path)
     f_name = assure_unique('repo_', f_list)
     
     fpath = pj(path, name)
     os.mkdir(fpath)
     repo = Repo(fpath, shipyard = url)
-    repo.append(repo)
-    if new:
+    repo.set_shipyard(url)
+    
+    if orphan:
         repo.do_checkout(branch, orphan = True)
     else:
         repo.do_fetch(branch = branch)
         repo.do_checkout(branch, new = True, track = True)
+    return repo
     
-def split_repo(core_repo, repo, path):
+def split_repo(repo, path):
     cur_branch = repo.get_cur_branch()
-    url = repo.get_remotes()[0].url
+    url = repo.get_remotes()[0]['url']
     cur_name = cur_branch.nm
     base_name = cur_name.split('#')[0]
     
@@ -267,15 +293,52 @@ def split_repo(core_repo, repo, path):
     
     repo.do_checkout(new_name, new = True)
     
-    setup_repo(path, url, cur_name)
+    return setup_repo(path, url, cur_branch.rm)
 
-def try_update(repo, path):
-    repo.do_push()
-
-def setup_folders(path, url):
-    master = Repo(pj(path, 'master'))
+def update_repo(repo):
+    cur_branch = repo.get_cur_branch()
+    rm = cur_branch.rm
+    nm = cur_branch.nm
     
-    folders = [ name for name in list_dir(path) if name != 'master' ]
+    repo.do_fetch(branch = rm)
+    repo.do_merge_safe()
+    push_err = repo.do_push()
+
+    if push_err in [0, 2]:
+        return 0
+    if push_err in [1]:
+        return 1
+    if push_err in [-1]:
+        return -1
+    
+    return -1
+
+def manage_repo(repo, path, repos):
+
+        
+def manage_repos(repos, path, repo_list = None):
+    if not repo_list:
+        repo_list = repos
+        
+    new_repos = []
+    
+    for repo in repo_list:
+        upd_err = update_repo(repo)
+        
+        if upd_err in [1]:
+            new_repo = split_repo(repo, path)
+            new_repos.append(new_repo)
+            
+            update_repo(new_repo)
+            update_repo(repo)
+    
+    repos.extend(new_repos)
+
+def update_folders(path, core_dir_name):
+    master = Repo(pj(path, core_dir_name))
+    url = master.get_remotes()[0]['url']
+    
+    folders = [ name for name in list_dir(path) if name != core_dir_name ]
     repos = []
     rts = []
     rts_owned = []
@@ -286,8 +349,6 @@ def setup_folders(path, url):
         repos.append(repo)
         rts_owned.append(repo.get_cur_branch().rt)
     
-    master.do_fetch(_all = True)
-    branches = master.get_branches()
     err_get, rem_branches = master.get_rem_branches()
 
     assert not err_get
@@ -299,13 +360,18 @@ def setup_folders(path, url):
             continue
         setup_repo(path, url, rt)
         rts_owned.append(rt)
+
+    manage_repos(repos, path)
+
+def setup_master(path, ):
     
-def rm_any(path):
+    
+def rm_any(path, cont_only == False):
+    if not os.path.exists(path):
+        return 1
     if os.path.isfile(path):
         os.remove(path)
         return 0
-    if not os.path.isdir(path):
-        return 1
     
     for item in list_all(path):
         err = rm_any(pj(path, item))
@@ -314,7 +380,8 @@ def rm_any(path):
         
     a_list = listdir(path)
     if a_list == None:
-        os.rmdir(path)
+        if not cont_only:
+            os.rmdir(path)
         return 0
     return 2
 
@@ -349,11 +416,12 @@ def setup_data(d_name, f_name, data):
 
 def wipe_data():
     if os.path.exists(d_name):
-        rm_any(d_name)
+        rm_any(d_name, cont_only = True)
 
 def window_func():
-    root = tk.Tk()
-    app = Application(master=root)
+    with gui_lock:
+        app = gui_pipe['w_ref']
+        
     app.mainloop()
     print('QUIT: Window')
     with gui_lock:
@@ -365,8 +433,9 @@ def window_func():
         #print("For real this time")
         return None
 
-class Database:
+class Datafile:
     db_dict = {}
+    ro = {}
     db_path = ""
     def __init__(self, db_path: str, new: bool = False, db_dict: dict):
         self.db_path = db_path
@@ -386,16 +455,31 @@ class Database:
     
     def __exit__(self):
         self.db_dict = copy.deepcopy(self.db_dict)
+        self.ro = copy.deepcopy(self.db_dict)
         self.update()
     ## Thanks to http://effbot.org/zone/python-with-statement.htm
         
 
 data_dir_name = 'Stargit'
 data_file_name = 'data.json'
+data_path = pj(data_dir_name, data_file_name)
+MODE = 0
+
+root = tk.Tk()
+app = Application(master=root)
+with gui_lock:
+    gui_pipe['w_ref'] = app
 
 err, data = open_data(data_dir_name, data_file_name)
 if err == 0:
-    
+    db_main = Datafile(data_path)
+    MODE = 1
+
+if MODE == 1:
+    if db_main.ro['has_repo']:
+        MODE = 3
+    if db_main.ro['has_remote']:
+        MODE = 2
 
 window_thread = thread.start_new_thread(window_func, ())
 RUNNING = True
@@ -404,9 +488,8 @@ while RUNNING:
         print(gui_pipe['l_sel'])
         if gui_pipe['_DONE']:
             RUNNING = False
-    time.sleep(0.01)
-    gui_pipe['l_ref'].delete(3)
-    gui_pipe['l_ref'].insert(3, s3 + "Dolor")
+    with db_main as db:
+        
+    
 
 print('QUIT: Main')
-    
