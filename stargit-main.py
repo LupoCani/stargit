@@ -267,7 +267,7 @@ def assure_unique(name, namelist, modify = inc):
             break;
     return new_name
 
-def setup_repo(path, url, branch, orphan = False):
+def setup_repo(path, url, branch, local, orphan = False):
     f_list = list_dir(path)
     f_name = assure_unique('repo_', f_list)
     
@@ -279,8 +279,9 @@ def setup_repo(path, url, branch, orphan = False):
     if orphan:
         repo.do_checkout(branch, orphan = True)
     else:
-        repo.do_fetch(branch = branch)
-        repo.do_checkout(branch, new = True, track = True)
+        if not local:
+            repo.do_fetch(branch = branch)
+        repo.do_checkout(branch, new = True, track = not local)
     return repo
     
 def split_repo(repo, path):
@@ -293,7 +294,7 @@ def split_repo(repo, path):
     
     repo.do_checkout(new_name, new = True)
     
-    return setup_repo(path, url, cur_branch.rm)
+    return setup_repo(path, url, cur_branch.rm, local = True)
 
 def update_repo(repo):
     cur_branch = repo.get_cur_branch()
@@ -312,9 +313,6 @@ def update_repo(repo):
         return -1
     
     return -1
-
-def manage_repo(repo, path, repos):
-
         
 def manage_repos(repos, path, repo_list = None):
     if not repo_list:
@@ -334,37 +332,43 @@ def manage_repos(repos, path, repo_list = None):
     
     repos.extend(new_repos)
 
-def update_folders(path, core_dir_name):
+def update_folders(repos, path, core_dir_name, core_branch_name):
     master = Repo(pj(path, core_dir_name))
     url = master.get_remotes()[0]['url']
     
     folders = [ name for name in list_dir(path) if name != core_dir_name ]
-    repos = []
     rts = []
     rts_owned = []
+    r_paths = [repo.path for repo in repos]
 
     for f in folders:
-        repo = Repo(pj(path, f))
-        #Add checks for empty/corrupt repo!
-        repos.append(repo)
+        r_path = pj(path, f)
+        if r_path in r_paths:
+            repo = repos[repo_paths.index(r_path)]
+        else
+            repo = Repo()
+            #Add checks for empty/corrupt repo!
+            repos.append(repo)
+            
         rts_owned.append(repo.get_cur_branch().rt)
     
     err_get, rem_branches = master.get_rem_branches()
 
     assert not err_get
 
-    rts = [rem_branch.rt for rem_branch in rem_branches]
+    rts = [rem_branch.rt for rem_branch in rem_branches if rem_branch.rt != core_branch_name]
 
     for rt in rts:
         if rt in rts_owned:
             continue
-        setup_repo(path, url, rt)
+        setup_repo(path, url, rt local = False)
         rts_owned.append(rt)
 
     manage_repos(repos, path)
 
-def setup_master(path, ):
-    
+def setup_master(path, url, core_dir_name, core_branch_name, new = False):
+    r_path = pj(path, core_dir_name)
+    m_repo = setup_repo(r_path, url, core_branch_name, local = not new)
     
 def rm_any(path, cont_only == False):
     if not os.path.exists(path):
@@ -458,12 +462,16 @@ class Datafile:
         self.ro = copy.deepcopy(self.db_dict)
         self.update()
     ## Thanks to http://effbot.org/zone/python-with-statement.htm
-        
+
+def set_win_mode(mode, s_mode, window):
+    
 
 data_dir_name = 'Stargit'
 data_file_name = 'data.json'
 data_path = pj(data_dir_name, data_file_name)
 MODE = 0
+SCREEN_MODE = -1
+RUNNING = True
 
 root = tk.Tk()
 app = Application(master=root)
@@ -482,14 +490,16 @@ if MODE == 1:
         MODE = 2
 
 window_thread = thread.start_new_thread(window_func, ())
-RUNNING = True
 while RUNNING:
+    time.sleep(0.05)
     with gui_lock:
         print(gui_pipe['l_sel'])
         if gui_pipe['_DONE']:
             RUNNING = False
     with db_main as db:
-        
+        if MODE == 0:
+            set_win_mode(0, SCREEN_MODE, app)
+            
     
 
 print('QUIT: Main')
