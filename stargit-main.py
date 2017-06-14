@@ -9,68 +9,133 @@ import copy
 from os.path import join as pj
 
 try:
-    import _thread as thread
+    import threading
 except ImportError:
-    import _dummy_thread as thread
+    import dummy_threading as threading
     
 def say_hi():
         print("hi there, everyone!")
 
-s1 = ''#u'\u2022' + ' '
+s1 = ''
 s2 = u'\u251c' + ' '
 s3 = u'\u2514' + ' '
 
-gui_lock = thread.allocate_lock()
+gui_lock = threading.Lock()
 gui_pipe = {
     '_DONE': False,
-    'l_sel': None,
-    'l_ref': None,
-    'btn_q': []
+    'sel_listbox': None,
+    'ref_app': None,
+    'event_queue': [],
+
+    'ship_list': []
     }
 
-def l_on_select(event):
-    widget = event.widget
-    value = widget.curselection()[0]
-    print(str(value))
-    with gui_lock:
-        gui_pipe['l_sel'] = value
-def b_p_
-
 class Application(tk.Frame):
+    def list_on_select(self, event):
+        widget = event.widget
+        value = widget.curselection()[0]
+        print(str(value))
+        self.lbl_title.config(text=widget.get(value))
+        with gui_lock:
+            gui_pipe['sel_listbox'] = value
+            
+    def force_select(self):
+        self.listbox.select_clear(0, tk.END)
+        self.listbox.select_set(2)
+        self.listbox.activate(2)
+        self.listbox.event_generate("<<ListboxSelect>>")
+        
     def createWidgets(self):
-        self.QUIT = tk.Button(self)
-        self.QUIT["text"] = "QUIT"
-        self.QUIT["fg"]   = "red"
-        self.QUIT["command"] =  self.quit
+        #self.QUIT = tk.Button(self)
+        #self.QUIT["text"] = "QUIT"
+        #self.QUIT["fg"]   = "red"
+        #self.QUIT["command"] =  self.quit
+        #self.QUIT.grid(row=0, column=1)
 
-        self.QUIT.pack({"side": "left"})
+        #self.hi_there = tk.Button(self)
+        #self.hi_there["text"] = "Hello",
+        #self.hi_there["command"] = say_hi
+        #self.hi_there.grid(row=1, column=1)
+        
+        self.listbox = tk.Listbox(self, width=40, height=15, font=('consolas', 10), selectmode=tk.SINGLE)
+        self.listbox.bind('<<ListboxSelect>>', self.list_on_select)
+        self.listbox.grid(row=0, column=0, rowspan=8, padx = 10, pady = 10)
+        
+        self.listbox.insert(tk.END, s1 + "Test")
+        str(self.listbox.delete(20))
+        self.listbox.insert(3, s3 + "Dolor")
+        self.listbox.insert(20, s3 + "Grande")
+        
+        self.lbl_title = tk.Label(self, text = 'Ship Name')
+        self.lbl_title.grid(row = 0, column = 1, columnspan = 2)
+        
+        self.btn_deploy = tk.Button(self, text = 'Deploy', command=self.force_select)
+        self.btn_deploy.grid(row = 1, column = 1, sticky=tk.S+tk.W+tk.E)
 
-        self.hi_there = tk.Button(self)
-        self.hi_there["text"] = "Hello",
-        self.hi_there["command"] = say_hi
+        self.btn_retract = tk.Button(self, text = 'Retract')
+        self.btn_retract.grid(row = 1, column = 2, sticky=tk.S+tk.W+tk.E)
 
-        self.hi_there.pack({"side": "left"})
+        self.btn_pull = tk.Button(self, text = 'Pull')
+        self.btn_pull.grid(row = 2, column = 1, sticky=tk.N+tk.W+tk.E)
 
-        listbox = tk.Listbox(self, width=20, height=5, font=('consolas', 10))
-        listbox.bind('<<ListboxSelect>>', l_on_select)
-        listbox.pack({"side": "left"})
-        listbox.insert(tk.END, s1 + "Test")
-        listbox.insert(tk.END, s2 + "Lorem")
-        listbox.insert(tk.END, s2 + "Ipsum")
-        listbox.insert(tk.END, s3 + "abcdefghijklmnopqrstuvxyzåäö-abcdefghijklmnopqrstuvxyzåäö-")
-        listbox.insert(tk.END, s1 + "Sit")
-        listbox.insert(tk.END, s1 + "Amet")
-        print(str(listbox.delete(3)))
-        listbox.insert(3, s3 + "Dolor")
-        listbox.insert(20, s3 + "Grande")
+        self.btn_discard = tk.Button(self, text = 'Discard')
+        self.btn_discard.grid(row = 2, column = 2, sticky=tk.N+tk.W+tk.E)
+
+        self.btn_sync = tk.Button(self, text = 'Sync')
+        self.btn_sync.grid(row = 3, column = 1, columnspan=2, sticky=tk.N+tk.W+tk.E)
+
+        self.cbx_auto = tk.Checkbutton(self, text = 'Autosync')
+        self.cbx_auto.grid(row = 4, column = 1, columnspan=2, sticky=tk.W)
+
+        #'All' versions
+        self.btn_deploy_all = tk.Button(self, text = 'Deploy All')
+        self.btn_deploy_all.grid(row = 5, column = 1, sticky=tk.S+tk.W+tk.E)
+
+        self.btn_retract_all = tk.Button(self, text = 'Retract All')
+        self.btn_retract_all.grid(row = 5, column = 2, sticky=tk.S+tk.W+tk.E)
+
+        self.btn_pull_all = tk.Button(self, text = 'Pull All')
+        self.btn_pull_all.grid(row = 6, column = 1, sticky=tk.N+tk.W+tk.E)
+
+        self.btn_discard_all = tk.Button(self, text = 'Discard All')
+        self.btn_discard_all.grid(row = 6, column = 2, sticky=tk.N+tk.W+tk.E)
+
+        self.btn_sync_all = tk.Button(self, text = 'Sync All')
+        self.btn_sync_all.grid(row = 7, column = 1, columnspan=2, sticky=tk.N+tk.W+tk.E)
+        
+        self.cbx_auto_all = tk.Checkbutton(self, text = 'Autosync all')
+        self.cbx_auto_all.grid(row = 8, column = 1, columnspan=2, sticky=tk.W)
 
         with gui_lock:
-            gui_pipe['l_ref'] = listbox
+            gui_pipe['ref_app'] = self
 
+        self.listbox.select_set(1)
+        self.listbox.activate(1)
+        self.listbox.event_generate("<<ListboxSelect>>")
+            
+    def set_mode(self, mode):
+        if mode == 0:
+            #self.btn_deploy.config(state=tk.DISABLED)
+            self.btn_retract.config(state=tk.DISABLED)
+            self.btn_pull.config(state=tk.DISABLED)
+            self.btn_discard.config(state=tk.DISABLED)
+            self.btn_sync.config(state=tk.DISABLED)
+            self.cbx_auto.config(state=tk.DISABLED)
+            
+            self.btn_deploy_all.config(state=tk.DISABLED)
+            self.btn_retract_all.config(state=tk.DISABLED)
+            self.btn_pull_all.config(state=tk.DISABLED)
+            self.btn_discard_all.config(state=tk.DISABLED)
+            self.btn_sync_all.config(state=tk.DISABLED)
+            self.cbx_auto_all.config(state=tk.DISABLED)
+        
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
         self.pack()
         self.createWidgets()
+        self.created = False
+
+#Thanks to http://effbot.org/tkinterbook/grid.htm
         
 def ident_neterr(string_in):
     if re_search('unable to access', str(string_in)):
@@ -107,8 +172,8 @@ class Repo:
         for rem_str in rem_str_list:
             rem = rem_str.split()
             rem_list.append({
-                'nm':  rem[0],
-                'url': rem[1]
+                'nm':  rem[0],  #Name
+                'url': rem[1]   #URL
                 })
         return rem_list
             
@@ -127,13 +192,13 @@ class Repo:
             strings = line.split()
             if len(strings.get(0, "")) > 0:
                 if strings[0] == "*":
-                    current = len(namelist)
-                    strings = strings[1:]
+                    current = len(branchlist)   #The current size of the list, also the index of the next item to be appended, IE this one
+                    strings = strings[1:]       #Remove asterisk
                 info = []
-                info['nm'] = strings[0]
-                info['sh'] = strings[1]
-                info['cm'] = strings[-1]
-                info['rt'] = None
+                info['nm'] = strings[0]     #Branch name
+                info['sh'] = strings[1]     #Hash
+                info['cm'] = strings[-1]    #Commit?
+                info['rt'] = None           #Remote
 
                 if re.search(r'\[\.\]'):
                     info['rt'] = re.sub(r'.*/', r'', strings[2][1:-1])
@@ -178,7 +243,10 @@ class Repo:
             return 0
         if re.search('possible to fast-forwar', op.err):
             return 1
-    
+    ##Errors:
+    #1: Branches diverged
+    #0: Success
+        
     def do_push(self, remote = False, upstream = True):
         cmd = ['push', '--porcelain']
         if upstream:
@@ -201,6 +269,12 @@ class Repo:
             return 0
 
         return -1
+    ##Errors:
+    #1: Branches diverged
+    #2: No changes
+    #101: Internet connection failed
+    #-1: Unknown error
+    #0: Sucess
     
     def do_commit(self):
         if len(run_cmd('status -z'.split()).out) == 0:
@@ -291,7 +365,6 @@ def split_repo(repo, path):
     base_name = cur_name.split('#')[0]
     
     new_name = '#'.join(base_name, get_idstring())
-    
     repo.do_checkout(new_name, new = True)
     
     return setup_repo(path, url, cur_branch.rm, local = True)
@@ -311,10 +384,18 @@ def update_repo(repo):
         return 1
     if push_err in [-1]:
         return -1
+    if push_err in [101]:
+        return 101
     
     return -1
-        
+    ##Errors:
+    #1: Branches diverged
+    #101: Network error
+    #-1: Unknown error
+    #0: Success
+    
 def manage_repos(repos, path, repo_list = None):
+    '''Updates repositories. Specify one or more repos in repo_list to update those specificallly, else, update all repos.'''
     if not repo_list:
         repo_list = repos
         
@@ -345,7 +426,7 @@ def update_folders(repos, path, core_dir_name, core_branch_name):
         r_path = pj(path, f)
         if r_path in r_paths:
             repo = repos[repo_paths.index(r_path)]
-        else
+        else:
             repo = Repo()
             #Add checks for empty/corrupt repo!
             repos.append(repo)
@@ -361,7 +442,7 @@ def update_folders(repos, path, core_dir_name, core_branch_name):
     for rt in rts:
         if rt in rts_owned:
             continue
-        setup_repo(path, url, rt local = False)
+        setup_repo(path, url, local = False)
         rts_owned.append(rt)
 
     manage_repos(repos, path)
@@ -370,7 +451,7 @@ def setup_master(path, url, core_dir_name, core_branch_name, new = False):
     r_path = pj(path, core_dir_name)
     m_repo = setup_repo(r_path, url, core_branch_name, local = not new)
     
-def rm_any(path, cont_only == False):
+def rm_any(path, cont_only = False):
     if not os.path.exists(path):
         return 1
     if os.path.isfile(path):
@@ -410,39 +491,74 @@ def open_data(d_name, f_name):
     
     return 0, data
 
+##Errors:
+#201: file not found
+#202: file contents corrupted
+#203: file contents not dictionary
+#204: data incomplete
+#0: success
+
 def setup_data(d_name, f_name, data):
     f_path = pj(d_name, f_name)
     if not assure_location(d_name):
         return 1
-    
-    with open(f_path, 'w') as f_data:
-        json.dump(data, f_data)
+
+    try:
+        with open(f_path, 'w') as f_data:
+            json.dump(data, f_data)
+    except:
+        return 2
+    return 0
+
+##Errors:
+#1: file already exists
+#2: write failure
+#0: sucess
 
 def wipe_data():
     if os.path.exists(d_name):
         rm_any(d_name, cont_only = True)
 
-def window_func():
-    with gui_lock:
-        app = gui_pipe['w_ref']
+class Window_thread(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.start()
         
-    app.mainloop()
-    print('QUIT: Window')
-    with gui_lock:
-        gui_pipe['_DONE'] = True
+    def run(self):
+        root = tk.Tk()
+        app = Application(master=root)
+        with gui_lock:
+            gui_pipe['w_ref'] = app
         try:
-            root.destroy()
+            app.mainloop()
+        except Exception as excep:
+            print('-> Window exception: ' + str(excep))
         except:
-            None
-        #print("For real this time")
-        return None
+            print('-> Unknown window exception.')
+        finally:
+            print('-> exiting winow')
+            with gui_lock:
+                gui_pipe['_DONE'] = True
+                try:
+                    root.destroy()
+                except Exception as excep:
+                    print('-> Root destruction exception: ' + str(excep))
+                except:
+                    print('-> Unknown root destruction exception.')
+            print('QUIT: Window ')
+            return None
 
 class Datafile:
+    ''' Tiny database system with 'with' hooks to ensure data is always witten to disk'''
     db_dict = {}
     ro = {}
     db_path = ""
-    def __init__(self, db_path: str, new: bool = False, db_dict: dict):
-        self.db_path = db_path
+    decoupled = False
+    def __init__(self, db_path: str, new: bool = False, db_dict: dict = {}):
+        self.db_path = str(db_path)
+        if len(self.db_path) == 0:
+            new = True
+            self.decoupled = True
         if new:
             self.db_dict = db_dict
             self.update()
@@ -451,20 +567,31 @@ class Datafile:
                 self.db_dict = json.load(db_file)
     
     def update(self):
+        if self.decoupled:
+            return
         with open(db_path, 'w') as db_file:
             json.dump(db_dict, db_file)
-    
+            
+    def couple(self, db_path):
+        self.db_path = db_path
+        self.decoupled = False
+        self.update()
+        
     def __enter__(self):
         return self.db_dict
     
-    def __exit__(self):
+    def __exit__(self, exception_type, exception_value, traceback):
+        if exception_value != None:
+            raise exception_value
         self.db_dict = copy.deepcopy(self.db_dict)
         self.ro = copy.deepcopy(self.db_dict)
         self.update()
     ## Thanks to http://effbot.org/zone/python-with-statement.htm
 
 def set_win_mode(mode, s_mode, window):
-    
+    if mode == 0:
+        pass
+        
 
 data_dir_name = 'Stargit'
 data_file_name = 'data.json'
@@ -473,15 +600,16 @@ MODE = 0
 SCREEN_MODE = -1
 RUNNING = True
 
-root = tk.Tk()
-app = Application(master=root)
-with gui_lock:
-    gui_pipe['w_ref'] = app
+
 
 err, data = open_data(data_dir_name, data_file_name)
 if err == 0:
     db_main = Datafile(data_path)
     MODE = 1
+else:
+    db_main = Datafile('')
+
+print("DB_err: " + str(err))
 
 if MODE == 1:
     if db_main.ro['has_repo']:
@@ -489,14 +617,20 @@ if MODE == 1:
     if db_main.ro['has_remote']:
         MODE = 2
 
-window_thread = thread.start_new_thread(window_func, ())
+window_thread = Window_thread()
+time.sleep(2)
+with gui_lock:
+    app = gui_pipe['w_ref']
+
 while RUNNING:
+    print("MODE: " + str(MODE))
     time.sleep(0.05)
     with gui_lock:
-        print(gui_pipe['l_sel'])
+        print('l_sel: ' + str(gui_pipe['sel_listbox']))
         if gui_pipe['_DONE']:
             RUNNING = False
     with db_main as db:
+        app.set_mode(MODE)
         if MODE == 0:
             set_win_mode(0, SCREEN_MODE, app)
             
