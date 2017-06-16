@@ -417,7 +417,9 @@ def update_folders(repos, path, core_dir_name, core_branch_name):
     master = Repo(pj(path, core_dir_name))
     url = master.get_remotes()[0]['url']
     
-    folders = [ name for name in list_dir(path) if name != core_dir_name ]
+    folders = [ name for name in list_dir(path)
+                if name != core_dir_name
+                and os.path.isdir(pj(path, name))]
     rts = []
     rts_owned = []
     r_paths = [repo.path for repo in repos]
@@ -427,7 +429,7 @@ def update_folders(repos, path, core_dir_name, core_branch_name):
         if r_path in r_paths:
             repo = repos[repo_paths.index(r_path)]
         else:
-            repo = Repo()
+            repo = Repo(r_path)
             #Add checks for empty/corrupt repo!
             repos.append(repo)
             
@@ -437,11 +439,11 @@ def update_folders(repos, path, core_dir_name, core_branch_name):
 
     assert not err_get
 
-    rts = [rem_branch.rt for rem_branch in rem_branches if rem_branch.rt != core_branch_name]
+    rts = [rem_branch.rt for rem_branch in rem_branches
+           if rem_branch.rt != core_branch_name
+           and not rem_branch.rt in rts_owned]
 
     for rt in rts:
-        if rt in rts_owned:
-            continue
         setup_repo(path, url, local = False)
         rts_owned.append(rt)
 
@@ -455,7 +457,10 @@ def rm_any(path, cont_only = False):
     if not os.path.exists(path):
         return 1
     if os.path.isfile(path):
-        os.remove(path)
+        try:
+            os.remove(path)
+        except:
+            return 3
         return 0
     
     for item in list_all(path):
@@ -588,17 +593,29 @@ class Datafile:
         self.update()
     ## Thanks to http://effbot.org/zone/python-with-statement.htm
 
-def set_win_mode(mode, s_mode, window):
-    if mode == 0:
-        pass
-        
+class Ship():
+    def __init__(self, path):
+        self.path = path
+        self.repo = Repository(path)
+        self.data = Datafile(path)
+
+def compile_screen_data(ships, db):
+    data_list = []
+    for ship in ships:
+        data = {}
+        data['name'] = ship.data.ro['name']
+        data['updated'] = ""
+        data['deployed'] = ""
 
 data_dir_name = 'Stargit'
+repo_dir_name = pj(data_dir_name, 'repositories')
 data_file_name = 'data.json'
 data_path = pj(data_dir_name, data_file_name)
 MODE = 0
+MODE_ACTIVE = None
 SCREEN_MODE = -1
 RUNNING = True
+repos = []
 
 
 
@@ -618,7 +635,7 @@ if MODE == 1:
         MODE = 2
 
 window_thread = Window_thread()
-time.sleep(2)
+time.sleep(1)
 with gui_lock:
     app = gui_pipe['w_ref']
 
@@ -629,11 +646,18 @@ while RUNNING:
         print('l_sel: ' + str(gui_pipe['sel_listbox']))
         if gui_pipe['_DONE']:
             RUNNING = False
+            
     with db_main as db:
         app.set_mode(MODE)
         if MODE == 0:
-            set_win_mode(0, SCREEN_MODE, app)
-            
+            pass
+            MODE_ACTIVE = 0
+        if MODE == 4:
+            #if MODE_ACTIVE != MODE:
+            #    repos = update_folders(repos, repo_dir_name, 'repo_main', 'stargit_master');
+            with gui_lock:
+                pass
+                
     
 
 print('QUIT: Main')
