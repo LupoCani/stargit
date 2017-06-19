@@ -6,7 +6,9 @@ import uuid
 import time
 import json
 import copy
+import inspect
 from os.path import join as pj
+
 
 try:
     import threading
@@ -59,52 +61,55 @@ class Application(tk.Frame):
         
         self.listbox = tk.Listbox(self, width=40, height=15, font=('consolas', 10), selectmode=tk.SINGLE)
         self.listbox.bind('<<ListboxSelect>>', self.list_on_select)
-        self.listbox.grid(row=0, column=0, rowspan=8, padx = 10, pady = 10)
+        self.listbox.grid(row=1, column=0, rowspan=8, padx = 10, pady = 10)
         
         self.listbox.insert(tk.END, s1 + "Test")
         str(self.listbox.delete(20))
         self.listbox.insert(3, s3 + "Dolor")
         self.listbox.insert(20, s3 + "Grande")
         
+        self.lbl_status = tk.Label(self, text = 'Status unknown')
+        self.lbl_status.grid(row = 0, column = 0, columnspan = 2, sticky=tk.W, padx = 10)
+        
         self.lbl_title = tk.Label(self, text = 'Ship Name')
-        self.lbl_title.grid(row = 0, column = 1, columnspan = 2)
+        self.lbl_title.grid(row = 1, column = 1, columnspan = 2, pady = 5)
         
         self.btn_deploy = tk.Button(self, text = 'Deploy', command=self.force_select)
-        self.btn_deploy.grid(row = 1, column = 1, sticky=tk.S+tk.W+tk.E)
+        self.btn_deploy.grid(row = 2, column = 1, sticky=tk.S+tk.W+tk.E)
 
         self.btn_retract = tk.Button(self, text = 'Retract')
-        self.btn_retract.grid(row = 1, column = 2, sticky=tk.S+tk.W+tk.E)
+        self.btn_retract.grid(row = 2, column = 2, sticky=tk.S+tk.W+tk.E)
 
         self.btn_pull = tk.Button(self, text = 'Pull')
-        self.btn_pull.grid(row = 2, column = 1, sticky=tk.N+tk.W+tk.E)
+        self.btn_pull.grid(row = 3, column = 1, sticky=tk.N+tk.W+tk.E)
 
         self.btn_discard = tk.Button(self, text = 'Discard')
-        self.btn_discard.grid(row = 2, column = 2, sticky=tk.N+tk.W+tk.E)
+        self.btn_discard.grid(row = 3, column = 2, sticky=tk.N+tk.W+tk.E)
 
         self.btn_sync = tk.Button(self, text = 'Sync')
-        self.btn_sync.grid(row = 3, column = 1, columnspan=2, sticky=tk.N+tk.W+tk.E)
+        self.btn_sync.grid(row = 4, column = 1, columnspan=2, sticky=tk.N+tk.W+tk.E)
 
         self.cbx_auto = tk.Checkbutton(self, text = 'Autosync')
-        self.cbx_auto.grid(row = 4, column = 1, columnspan=2, sticky=tk.W)
+        self.cbx_auto.grid(row = 5, column = 1, columnspan=2, sticky=tk.W)
 
         #'All' versions
         self.btn_deploy_all = tk.Button(self, text = 'Deploy All')
-        self.btn_deploy_all.grid(row = 5, column = 1, sticky=tk.S+tk.W+tk.E)
+        self.btn_deploy_all.grid(row = 6, column = 1, sticky=tk.S+tk.W+tk.E)
 
         self.btn_retract_all = tk.Button(self, text = 'Retract All')
-        self.btn_retract_all.grid(row = 5, column = 2, sticky=tk.S+tk.W+tk.E)
+        self.btn_retract_all.grid(row = 6, column = 2, sticky=tk.S+tk.W+tk.E)
 
         self.btn_pull_all = tk.Button(self, text = 'Pull All')
-        self.btn_pull_all.grid(row = 6, column = 1, sticky=tk.N+tk.W+tk.E)
+        self.btn_pull_all.grid(row = 7, column = 1, sticky=tk.N+tk.W+tk.E)
 
         self.btn_discard_all = tk.Button(self, text = 'Discard All')
-        self.btn_discard_all.grid(row = 6, column = 2, sticky=tk.N+tk.W+tk.E)
+        self.btn_discard_all.grid(row = 7, column = 2, sticky=tk.N+tk.W+tk.E)
 
         self.btn_sync_all = tk.Button(self, text = 'Sync All')
-        self.btn_sync_all.grid(row = 7, column = 1, columnspan=2, sticky=tk.N+tk.W+tk.E)
+        self.btn_sync_all.grid(row = 8, column = 1, columnspan=2, sticky=tk.N+tk.W+tk.E)
         
         self.cbx_auto_all = tk.Checkbutton(self, text = 'Autosync all')
-        self.cbx_auto_all.grid(row = 8, column = 1, columnspan=2, sticky=tk.W)
+        self.cbx_auto_all.grid(row = 9, column = 1, columnspan=2, sticky=tk.W)
 
         with gui_lock:
             gui_pipe['ref_app'] = self
@@ -194,7 +199,7 @@ class Repo:
                 if strings[0] == "*":
                     current = len(branchlist)   #The current size of the list, also the index of the next item to be appended, IE this one
                     strings = strings[1:]       #Remove asterisk
-                info = []
+                info = {}
                 info['nm'] = strings[0]     #Branch name
                 info['sh'] = strings[1]     #Hash
                 info['cm'] = strings[-1]    #Commit?
@@ -205,6 +210,7 @@ class Repo:
                     
                 branchlist.append(info)
         return branchlist, current
+    
     def get_rem_branches(self, remote = 'shipyard'):
         cmd = ['ls-remote', '-h',remote]
         op = {}
@@ -306,7 +312,7 @@ class Repo:
         if orphan:
             self.run_cmd(['rm', '-rf'])
     
-    def __init__(self, path, shipyard):
+    def __init__(self, path, shipyard = None):
         self.path = path
         self.run_cmd(['init'])
         if shipyard:
@@ -321,10 +327,10 @@ def list_file(path):
 def list_all(path):
     return list(set([item for item in os.listdir(path) if os.path.exists(pj(path, item))]))
 
-def assure_location(path, name):
-    if not os.path.isdir(pj(path, name)):
+def assure_location(path):
+    if not os.path.isdir(path):
         try:
-            os.mkdir(pj(path, name))
+            os.mkdir(path)
         except:
             return False
     return True
@@ -413,9 +419,10 @@ def manage_repos(repos, path, repo_list = None):
     
     repos.extend(new_repos)
 
-def update_folders(repos, path, core_dir_name, core_branch_name):
+def update_folders(repos, path, core_dir_name):
     master = Repo(pj(path, core_dir_name))
     url = master.get_remotes()[0]['url']
+    core_branch_name = master.get_cur_branch().nm
     
     folders = [ name for name in list_dir(path)
                 if name != core_dir_name
@@ -468,7 +475,7 @@ def rm_any(path, cont_only = False):
         if err != 0:
             return err
         
-    a_list = listdir(path)
+    a_list = os.listdir(path)
     if a_list == None:
         if not cont_only:
             os.rmdir(path)
@@ -507,7 +514,6 @@ def setup_data(d_name, f_name, data):
     f_path = pj(d_name, f_name)
     if not assure_location(d_name):
         return 1
-
     try:
         with open(f_path, 'w') as f_data:
             json.dump(data, f_data)
@@ -520,9 +526,9 @@ def setup_data(d_name, f_name, data):
 #2: write failure
 #0: sucess
 
-def wipe_data():
-    if os.path.exists(d_name):
-        rm_any(d_name, cont_only = True)
+def wipe_data(path):
+    if os.path.exists(path):
+        rm_any(path, cont_only = True)
 
 class Window_thread(threading.Thread):
     def __init__(self):
@@ -554,13 +560,18 @@ class Window_thread(threading.Thread):
             return None
 
 class Datafile:
-    ''' Tiny database system with 'with' hooks to ensure data is always witten to disk'''
-    db_dict = {}
-    ro = {}
-    db_path = ""
-    decoupled = False
+    ''' Tiny database system with 'with' hooks to ensure data is always witten to disk. '''
     def __init__(self, db_path: str, new: bool = False, db_dict: dict = {}):
+        self.db_dict = {}
+        self.ro = {}
+        self.db_path = ''
+        self.decoupled = False
+        self.frozen = False
+        self.__is_entered = False
+        self.__lock = threading.Lock()
+        
         self.db_path = str(db_path)
+        
         if len(self.db_path) == 0:
             new = True
             self.decoupled = True
@@ -572,7 +583,7 @@ class Datafile:
                 self.db_dict = json.load(db_file)
     
     def update(self):
-        if self.decoupled:
+        if self.decoupled or self.frozen:
             return
         with open(db_path, 'w') as db_file:
             json.dump(db_dict, db_file)
@@ -580,48 +591,91 @@ class Datafile:
     def couple(self, db_path):
         self.db_path = db_path
         self.decoupled = False
-        self.update()
+        if not self.__is_entered:
+            self.update()
+
+    def freeze(self):
+        if decoupled:
+            return
+        self.frozen = True
+        self.ro = None
+
+    def unfreeze(self):
+        if not self.frozen:
+            return
+        self.__init__(self.db_path, new = False)
         
     def __enter__(self):
+        if self.frozen:
+            raise Exception('Datafile error: cannot load while frozen.')
+        self.__lock.acquire()
+        self.__is_entered = True
         return self.db_dict
+        
     
     def __exit__(self, exception_type, exception_value, traceback):
         if exception_value != None:
             raise exception_value
-        self.db_dict = copy.deepcopy(self.db_dict)
-        self.ro = copy.deepcopy(self.db_dict)
-        self.update()
+        try:
+            self.db_dict = copy.deepcopy(self.db_dict)
+            self.ro = copy.deepcopy(self.db_dict)
+            self.update()
+        finally:
+            self.__is_entered = False
+            self.__lock.release()
+            return True
     ## Thanks to http://effbot.org/zone/python-with-statement.htm
 
 class Ship():
-    def __init__(self, path):
-        self.path = path
-        self.repo = Repository(path)
-        self.data = Datafile(path)
+    path = ''
+    iden = ''
+    repo = None
+    data = None
 
 def compile_screen_data(ships, db):
     data_list = []
     for ship in ships:
         data = {}
         data['name'] = ship.data.ro['name']
-        data['updated'] = ""
-        data['deployed'] = ""
+        data['updated'] = ''
+        data['deployed'] = ''
 
-data_dir_name = 'Stargit'
-repo_dir_name = pj(data_dir_name, 'repositories')
+def setup_mode_4(db, path, core_dir_name):
+    repos = []
+    databases = []
+    ships = []
+    
+    update_folders(repos, path, core_dir_name)
+
+    for repo in repos:
+        ship = Ship()
+        ship.path = repo.path
+        ship.iden = repo.get_cur_branch().nm
+        ship.repo = repo
+        ship.data = Datafile(pj(repo.path, 'data.json'))
+
+
+this_file_path = os.path.abspath(inspect.stack()[0][1])
+this_file_dir = os.path.dirname(this_file_path)
+
+repo_dir_name = 'repositories'
 data_file_name = 'data.json'
-data_path = pj(data_dir_name, data_file_name)
+master_dir_name = 'master'
+master_branch_name = 'stargit_master'
+
+data_dir_path =  pj(this_file_dir, 'Stargit')
+repo_dir_path =  pj(data_dir_path, repo_dir_name)
+data_file_path = pj(data_dir_path, data_file_name)
+
 MODE = 0
 MODE_ACTIVE = None
 SCREEN_MODE = -1
 RUNNING = True
 repos = []
 
-
-
-err, data = open_data(data_dir_name, data_file_name)
+err, data = open_data(data_dir_path, data_file_name)
 if err == 0:
-    db_main = Datafile(data_path)
+    db_main = Datafile(data_file_path)
     MODE = 1
 else:
     db_main = Datafile('')
@@ -630,12 +684,13 @@ print("DB_err: " + str(err))
 
 if MODE == 1:
     if db_main.ro['has_repo']:
-        MODE = 3
-    if db_main.ro['has_remote']:
         MODE = 2
+    if db_main.ro['has_remote']:
+        MODE = 3
 
 window_thread = Window_thread()
 time.sleep(1)
+
 with gui_lock:
     app = gui_pipe['w_ref']
 
@@ -650,14 +705,26 @@ while RUNNING:
     with db_main as db:
         app.set_mode(MODE)
         if MODE == 0:
-            pass
-            MODE_ACTIVE = 0
+            db['is_setup'] = True
+            db['has_repo'] = False
+            db['has_remote'] = False
+            db['tags'] = {}
+            
+            assure_location(data_dir_path)
+            wipe_data(data_dir_path)
+            setup_data(data_dir_path, data_file_name, db)
+            db_main.couple(data_file_path)
+            MODE = 1
+        if MODE == 1:
+            is_new = not input('Load existing repo? y/n') == 'y'
+            if is_new:
+                assure_location(repo_dir_path)
+                setup_master(repo_dir_path, '', master_dir_name, master_branch_name, new)
+            
         if MODE == 4:
             #if MODE_ACTIVE != MODE:
             #    repos = update_folders(repos, repo_dir_name, 'repo_main', 'stargit_master');
             with gui_lock:
                 pass
-                
-    
-
+            
 print('QUIT: Main')
