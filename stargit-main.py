@@ -457,7 +457,10 @@ def update_folders(repos, path, core_dir_name):
     manage_repos(repos, path)
 
 def setup_master(path, url, core_dir_name, core_branch_name, new = False):
+    raise Exception('This function is not done yet')
     r_path = pj(path, core_dir_name)
+    master = Repo(r_path)
+    
     m_repo = setup_repo(r_path, url, core_branch_name, local = not new)
     
 def rm_any(path, cont_only = False):
