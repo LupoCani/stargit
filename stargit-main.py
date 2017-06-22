@@ -143,27 +143,44 @@ class Application(tk.Frame):
 #Thanks to http://effbot.org/tkinterbook/grid.htm
         
 def ident_neterr(string_in):
-    if re_search('unable to access', str(string_in)):
+    if re.search('unable to access', str(string_in)):
         return True
     return False
 
 def get_idstring(fake_input = None):
     return ''.join(string(uuid.uuid4()).split('-'))
 
+def format_output(string_in):
+        return str(eval(str(string_in)[1:]))[:-1]
+
+class Branch():
+        nm = ''
+        sh = ''
+        cm = ''
+        rt = False
+        
+class Remote():
+    nm = ''
+    url = ''
+    def __init__(self, nm = '', url = ''):
+        self.nm = nm;
+        self.url = url;
+
+class Cmd_out():
+    out = ''
+    err = ''
+    
 class Repo:
     path = ''
     
-    def format_output(self, string_in):
-        return str(eval(str(str_in)[1:]))[:-1]
-    
-    def run_cmd(self, cmd, output = {}):
+    def run_cmd(self, cmd, output = Cmd_out()):
         si = subprocess.STARTUPINFO()
-        si.dwFlags = subprocess.STARTF_USESHOWWINDOW  # tell windows to use wShowWindow options
-        si.wShowWindow = subprocess.SW_HIDE  # ShowWindow option - only one that sounded useful
+        #si.dwFlags = subprocess.STARTF_USESHOWWINDOW  # tell windows to use wShowWindow options
+        #si.wShowWindow = subprocess.SW_HIDE  # ShowWindow option - only one that sounded useful
 
         result = subprocess.Popen(['git', *cmd], cwd=self.path, stdout = subprocess.PIPE, stderr = subprocess.PIPE, startupinfo=si)
-        output['out'] = format_output(result.stdout.read())
-        output['err'] = format_output(result.stderr.read())
+        output.out = format_output(result.stdout.read())
+        output.err = format_output(result.stderr.read())
         return output
     
     def set_shipyard(self, url):
@@ -176,53 +193,57 @@ class Repo:
         rem_list = []
         for rem_str in rem_str_list:
             rem = rem_str.split()
-            rem_list.append({
-                'nm':  rem[0],  #Name
-                'url': rem[1]   #URL
-                })
+            rem_list.append(Remote(
+                nm  = rem[0],
+                url = rem[1]
+                ))
         return rem_list
             
 
     def branch_rm(self, branch):
         cmd = ['branch', '-d', branch]
         self.run_cmd(cmd)
-
+        
     def get_branches(self):
-        cmd = ['branch']
+        cmd = ['branch', '-vv']
         op = self.run_cmd(cmd)
         linelist = op.out.split("\n")
         branchlist = []
         current = -1
         for line in linelist:
             strings = line.split()
-            if len(strings.get(0, "")) > 0:
+            if len(strings) > 0 and len(strings[0]) > 0:
                 if strings[0] == "*":
                     current = len(branchlist)   #The current size of the list, also the index of the next item to be appended, IE this one
                     strings = strings[1:]       #Remove asterisk
-                info = {}
-                info['nm'] = strings[0]     #Branch name
-                info['sh'] = strings[1]     #Hash
-                info['cm'] = strings[-1]    #Commit?
-                info['rt'] = None           #Remote
+                info = Branch()
+                info.nm = strings[0]     #Branch name
+                info.sh = strings[1]     #Hash
+                #info.cm = strings[-1]    #Commit?
+                info.rt = False           #Remote
 
-                if re.search(r'\[\.\]'):
-                    info['rt'] = re.sub(r'.*/', r'', strings[2][1:-1])
+                if re.search(r'\[shipyard/.*\]', strings[2]):
+                    info.rt = re.sub(r'.*/', r'', strings[2][0:-1])
                     
                 branchlist.append(info)
         return branchlist, current
     
     def get_rem_branches(self, remote = 'shipyard'):
-        cmd = ['ls-remote', '-h',remote]
-        op = {}
-        self.run_cmd(cmd, op)
+        cmd = ['ls-remote', '-h', remote]
+        op = self.run_cmd(cmd)
+        
         if ident_neterr(op.err):
             return 101, []
-        return 0, [rem.split('/')[-1] for rem in op.out.split('\n')]
+        lines = op.out.split('\n');
+        return 0, [rem.split('/')[-1] for rem in lines]
         
         
     def get_cur_branch(self):
         branches, current = self.get_branches()
-        return branches.get(current, None)
+        if 0 <= current and current < len(branches):
+            
+            return branches[current];
+        return None
     
     def do_fetch(self, branch = None, _all = False):
         cmd = ['fetch', 'shipyard']
@@ -230,16 +251,17 @@ class Repo:
         if branch:
             cmd.append(branch)
         elif not _all:
-            cmd.append(get_cur_branch().rt)
-        op = {}    
-        self.run_cmd(cmd, op)
+            cmd.append(self.get_cur_branch().rt)
+        
+        op = self.run_cmd(cmd)
         if ident_neterr(op.err):
             return 101
         return 0
+    
     def do_merge_safe(self):
         cmd = ['merge', '--ff-only']
         cur_branch = self.get_cur_branch()
-        cmd.append('shipyard/' + cur_branch.rm)
+        cmd.append('shipyard/' + cur_branch.rt)
         cmd.append(cur_branch.nm)
 
         op = self.run_cmd(cmd)
@@ -257,12 +279,14 @@ class Repo:
         cmd = ['push', '--porcelain']
         if upstream:
             cmd.append('-u')
+            
         if remote == False:
             remote = 'shipyard'
         cmd.append(remote)
-        cmd.append(get_cur_branch().nm)
+        cmd.append(self.get_cur_branch().nm)
         
         op = self.run_cmd(cmd)
+        
         if ident_neterr(op.err):
             return 101
         if len(op.out) == 0:
@@ -283,7 +307,7 @@ class Repo:
     #0: Sucess
     
     def do_commit(self):
-        if len(run_cmd('status -z'.split()).out) == 0:
+        if len(self.run_cmd('status -z'.split()).out) == 0:
             return 1
             
         cmd = 'add . --all'.split()
@@ -351,7 +375,7 @@ def setup_repo(path, url, branch, local, orphan = False):
     f_list = list_dir(path)
     f_name = assure_unique('repo_', f_list)
     
-    fpath = pj(path, name)
+    fpath = pj(path, f_name)
     os.mkdir(fpath)
     repo = Repo(fpath, shipyard = url)
     repo.set_shipyard(url)
@@ -366,21 +390,21 @@ def setup_repo(path, url, branch, local, orphan = False):
     
 def split_repo(repo, path):
     cur_branch = repo.get_cur_branch()
-    url = repo.get_remotes()[0]['url']
+    url = repo.get_remotes()[0].url
     cur_name = cur_branch.nm
     base_name = cur_name.split('#')[0]
     
     new_name = '#'.join(base_name, get_idstring())
     repo.do_checkout(new_name, new = True)
     
-    return setup_repo(path, url, cur_branch.rm, local = True)
+    return setup_repo(path, url, cur_branch.rt, local = True)
 
 def update_repo(repo):
     cur_branch = repo.get_cur_branch()
-    rm = cur_branch.rm
+    rt = cur_branch.rt
     nm = cur_branch.nm
     
-    repo.do_fetch(branch = rm)
+    repo.do_fetch(branch = rt)
     repo.do_merge_safe()
     push_err = repo.do_push()
 
@@ -418,10 +442,11 @@ def manage_repos(repos, path, repo_list = None):
             update_repo(repo)
     
     repos.extend(new_repos)
-
-def update_folders(repos, path, core_dir_name):
-    master = Repo(pj(path, core_dir_name))
-    url = master.get_remotes()[0]['url']
+    
+    
+def update_folders(repos, path, master):
+    core_dir_name = os.path.basename(master.path)
+    url = master.get_remotes()[0].url
     core_branch_name = master.get_cur_branch().nm
     
     folders = [ name for name in list_dir(path)
@@ -434,7 +459,7 @@ def update_folders(repos, path, core_dir_name):
     for f in folders:
         r_path = pj(path, f)
         if r_path in r_paths:
-            repo = repos[repo_paths.index(r_path)]
+            repo = repos[r_paths.index(r_path)]
         else:
             repo = Repo(r_path)
             #Add checks for empty/corrupt repo!
@@ -444,24 +469,37 @@ def update_folders(repos, path, core_dir_name):
     
     err_get, rem_branches = master.get_rem_branches()
 
-    assert not err_get
+    if err_get:
+        raise Exception('Error reading branches')
 
-    rts = [rem_branch.rt for rem_branch in rem_branches
-           if rem_branch.rt != core_branch_name
-           and not rem_branch.rt in rts_owned]
+    rts = [rem_branch for rem_branch in rem_branches
+           if rem_branch != core_branch_name
+           and not rem_branch in rts_owned]
 
     for rt in rts:
-        setup_repo(path, url, local = False)
+        setup_repo(path, url, rt, local = False)
         rts_owned.append(rt)
 
     manage_repos(repos, path)
 
 def setup_master(path, url, core_dir_name, core_branch_name, new = False):
-    raise Exception('This function is not done yet')
     r_path = pj(path, core_dir_name)
+    os.mkdir(r_path)
     master = Repo(r_path)
     
-    m_repo = setup_repo(r_path, url, core_branch_name, local = not new)
+    if new:
+        master.do_checkout(core_branch_name, orphan = True)
+        master_file_name = 'data_shared.json'
+        f_path = pj(r_path, master_file_name)
+        with Datafile(f_path, new = True) as db:
+            db['repo_active'] = True
+        master.do_commit()
+            
+    else:
+        master.set_shipyard(url)
+        master.do_fetch(core_branch_name)
+        master.do_checkout(core_branch_name, new = True, track = True)
+    return master
     
 def rm_any(path, cont_only = False):
     if not os.path.exists(path):
@@ -570,7 +608,7 @@ class Datafile:
         self.db_path = ''
         self.decoupled = False
         self.frozen = False
-        self.__is_entered = False
+        self.__enter_level = 0
         self.__lock = threading.Lock()
         
         self.db_path = str(db_path)
@@ -584,17 +622,19 @@ class Datafile:
         else:
             with open(self.db_path, 'r') as db_file:
                 self.db_dict = json.load(db_file)
+        with self:
+            pass
     
     def update(self):
         if self.decoupled or self.frozen:
             return
-        with open(db_path, 'w') as db_file:
-            json.dump(db_dict, db_file)
+        with open(self.db_path, 'w') as db_file:
+            json.dump(self.db_dict, db_file)
             
     def couple(self, db_path):
         self.db_path = db_path
         self.decoupled = False
-        if not self.__is_entered:
+        if self.__enter_level == 0:
             self.update()
 
     def freeze(self):
@@ -611,9 +651,10 @@ class Datafile:
     def __enter__(self):
         if self.frozen:
             raise Exception('Datafile error: cannot load while frozen.')
-        self.__lock.acquire()
-        self.__is_entered = True
-        return self.db_dict
+        if self.__enter_level == 0:
+            self.__lock.acquire();
+        self.__enter_level += 1;
+        return self.db_dict;
         
     
     def __exit__(self, exception_type, exception_value, traceback):
@@ -624,8 +665,9 @@ class Datafile:
             self.ro = copy.deepcopy(self.db_dict)
             self.update()
         finally:
-            self.__is_entered = False
-            self.__lock.release()
+            self.__enter_level += -1;
+            if self.__enter_level == 0:
+                self.__lock.release()
             return True
     ## Thanks to http://effbot.org/zone/python-with-statement.htm
 
@@ -669,12 +711,14 @@ master_branch_name = 'stargit_master'
 data_dir_path =  pj(this_file_dir, 'Stargit')
 repo_dir_path =  pj(data_dir_path, repo_dir_name)
 data_file_path = pj(data_dir_path, data_file_name)
+master_dir_path = pj(repo_dir_path, master_dir_name)
 
 MODE = 0
 MODE_ACTIVE = None
 SCREEN_MODE = -1
 RUNNING = True
 repos = []
+master = None
 
 err, data = open_data(data_dir_path, data_file_name)
 if err == 0:
@@ -719,14 +763,37 @@ while RUNNING:
             db_main.couple(data_file_path)
             MODE = 1
         if MODE == 1:
-            is_new = not input('Load existing repo? y/n') == 'y'
+            is_new = not input('Load existing remote repository? y/n \n') == 'y'
+            assure_location(repo_dir_path);
             if is_new:
-                assure_location(repo_dir_path)
-                setup_master(repo_dir_path, '', master_dir_name, master_branch_name, new)
+                master = setup_master(repo_dir_path, '', master_dir_name, master_branch_name, True)
+            else:
+                url = input('Enter remote url: \n')
+                master = setup_master(repo_dir_path, url, master_dir_name, master_branch_name, False)
+                
+            db['has_repo'] = True
+            if is_new:
+                MODE = 2
+            else:
+                MODE = 3
+                db['has_remote'] = True
+                
+        if MODE == 2:
+            url = ''
+            while not re.search(r'https?://|\w*@\w*\.\w*:', url):
+                url = input('To continue, enter remote url: \n')
+            master = master or Repo(master_dir_path)
+            master.set_shipyard(url)
+            master.do_push()
+            db['has_remote'] = True
+            MODE = 3
+            
+        if MODE == 3:
+            master = master or Repo(master_dir_path)
+            update_folders(repos, repo_dir_path, master);
+            MODE = 4
             
         if MODE == 4:
-            #if MODE_ACTIVE != MODE:
-            #    repos = update_folders(repos, repo_dir_name, 'repo_main', 'stargit_master');
             with gui_lock:
                 pass
             
